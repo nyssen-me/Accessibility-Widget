@@ -202,7 +202,7 @@ For issues or questions about implementing the widget, refer to:
 
 ## License
 
-Copyright © Hillside Agency
+Copyright © nyssen.me
 
 ---
 
