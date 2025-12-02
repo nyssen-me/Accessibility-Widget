@@ -3,6 +3,65 @@
  * WCAG 2.1 AA Compliant
  */
 
+// Utility: Shared keyboard navigation for radio groups
+const handleRadioKeyNav = (e, buttons) => {
+    const buttonsArray = Array.from(buttons);
+    const currentIndex = buttonsArray.indexOf(e.currentTarget);
+    let nextIndex = null;
+
+    switch(e.key) {
+        case 'ArrowRight':
+        case 'ArrowDown':
+            e.preventDefault();
+            nextIndex = (currentIndex + 1) % buttonsArray.length;
+            break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+            e.preventDefault();
+            nextIndex = (currentIndex - 1 + buttonsArray.length) % buttonsArray.length;
+            break;
+        case 'Home':
+            e.preventDefault();
+            nextIndex = 0;
+            break;
+        case 'End':
+            e.preventDefault();
+            nextIndex = buttonsArray.length - 1;
+            break;
+    }
+
+    if (nextIndex !== null) {
+        buttonsArray[nextIndex].focus();
+        buttonsArray[nextIndex].click();
+    }
+};
+
+// Utility: LocalStorage helper
+const storage = {
+    get: (key, defaultValue = null) => {
+        try {
+            return localStorage.getItem(key) || defaultValue;
+        } catch (e) {
+            console.warn(`Failed to load ${key}:`, e);
+            return defaultValue;
+        }
+    },
+    set: (key, value) => {
+        try {
+            localStorage.setItem(key, value);
+        } catch (e) {
+            console.warn(`Failed to save ${key}:`, e);
+        }
+    },
+    remove: (key) => {
+        try {
+            localStorage.removeItem(key);
+        } catch (e) {
+            console.warn(`Failed to remove ${key}:`, e);
+        }
+    }
+};
+
 class AccessibilityWidgetController {
     constructor(options = {}) {
         // Configuration
@@ -10,7 +69,7 @@ class AccessibilityWidgetController {
         this.panelSelector = options.panel || '.accessibility-widget-panel';
         this.backdropSelector = options.backdrop || '.accessibility-widget-backdrop';
 
-        // Elements - Support multiple toggle buttons
+        // Elements
         this.toggleButtons = document.querySelectorAll(this.toggleButtonSelector);
         this.panel = document.querySelector(this.panelSelector);
         this.backdrop = document.querySelector(this.backdropSelector);
@@ -19,8 +78,6 @@ class AccessibilityWidgetController {
         this.isOpen = false;
         this.focusedElementBeforeOpen = null;
         this.focusableElements = [];
-        this.firstFocusableElement = null;
-        this.lastFocusableElement = null;
 
         // Validate required elements
         if (this.toggleButtons.length === 0 || !this.panel) {
@@ -28,61 +85,50 @@ class AccessibilityWidgetController {
             return;
         }
 
+        // Bind methods
+        this.handleClickOutside = this.handleClickOutside.bind(this);
+        this.handleKeyDown = this.handleKeyDown.bind(this);
+
         this.init();
     }
 
     init() {
-        this.bindEvents();
         this.updateFocusableElements();
-        this.bindCloseButton();
-    }
 
-    bindCloseButton() {
-        const closeButton = this.panel.querySelector('.widget-close-btn');
-        if (closeButton) {
-            closeButton.addEventListener('click', () => this.close());
-        }
-    }
-
-    bindEvents() {
-        // Toggle buttons - bind all of them
+        // Toggle buttons
         this.toggleButtons.forEach(button => {
             button.addEventListener('click', () => this.toggle());
         });
 
-        // Backdrop click
+        // Close button
+        const closeButton = this.panel.querySelector('.widget-close-btn');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => this.close());
+        }
+
+        // Backdrop
         if (this.backdrop) {
             this.backdrop.addEventListener('click', () => this.close());
         }
-
-        // Click outside
-        document.addEventListener('click', (e) => this.handleClickOutside(e));
-
-        // Keyboard events
-        document.addEventListener('keydown', (e) => this.handleKeyDown(e));
     }
-    
+
     updateFocusableElements() {
         if (!this.panel) return;
-        
+
         const focusableSelectors = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
         this.focusableElements = Array.from(this.panel.querySelectorAll(focusableSelectors));
-        this.firstFocusableElement = this.focusableElements[0];
-        this.lastFocusableElement = this.focusableElements[this.focusableElements.length - 1];
     }
-    
+
     toggle() {
         this.isOpen ? this.close() : this.open();
     }
-    
+
     open() {
         this.isOpen = true;
         this.focusedElementBeforeOpen = document.activeElement;
 
-        // Update ARIA and visibility for all toggle buttons
-        this.toggleButtons.forEach(button => {
-            button.setAttribute('aria-expanded', 'true');
-        });
+        // Update ARIA and visibility
+        this.toggleButtons.forEach(button => button.setAttribute('aria-expanded', 'true'));
         this.panel.setAttribute('aria-hidden', 'false');
         this.panel.setAttribute('data-open', 'true');
 
@@ -91,26 +137,21 @@ class AccessibilityWidgetController {
             this.backdrop.style.display = 'block';
         }
 
-        // Focus management
-        this.updateFocusableElements();
-        if (this.firstFocusableElement) {
-            // Small delay to ensure panel is visible
-            setTimeout(() => {
-                this.firstFocusableElement.focus();
-            }, 100);
-        }
+        // Attach document listeners only when open
+        document.addEventListener('click', this.handleClickOutside);
+        document.addEventListener('keydown', this.handleKeyDown);
 
-        // Prevent body scroll
-        //document.body.style.overflow = 'hidden';
+        // Focus management
+        if (this.focusableElements[0]) {
+            setTimeout(() => this.focusableElements[0].focus(), 100);
+        }
     }
-    
+
     close() {
         this.isOpen = false;
 
-        // Update ARIA and visibility for all toggle buttons
-        this.toggleButtons.forEach(button => {
-            button.setAttribute('aria-expanded', 'false');
-        });
+        // Update ARIA and visibility
+        this.toggleButtons.forEach(button => button.setAttribute('aria-expanded', 'false'));
         this.panel.setAttribute('aria-hidden', 'true');
         this.panel.setAttribute('data-open', 'false');
 
@@ -119,87 +160,49 @@ class AccessibilityWidgetController {
             this.backdrop.style.display = 'none';
         }
 
-        // Restore body scroll
-        //document.body.style.overflow = '';
+        // Remove document listeners when closed
+        document.removeEventListener('click', this.handleClickOutside);
+        document.removeEventListener('keydown', this.handleKeyDown);
 
-        // Return focus to the button that was focused before opening
-        if (this.focusedElementBeforeOpen) {
+        // Return focus
+        if (this.focusedElementBeforeOpen && this.focusedElementBeforeOpen.focus) {
             this.focusedElementBeforeOpen.focus();
         } else {
-            // Focus the first visible toggle button
-            const visibleButton = Array.from(this.toggleButtons).find(btn =>
-                btn.offsetParent !== null
-            );
-            if (visibleButton) {
-                visibleButton.focus();
-            }
+            const visibleButton = Array.from(this.toggleButtons).find(btn => btn.offsetParent !== null);
+            if (visibleButton) visibleButton.focus();
         }
     }
-    
+
     handleClickOutside(e) {
-        if (!this.isOpen) return;
-
-        let targetElement = e.target;
-
-        // Check if click is outside both panel and all toggle buttons
-        while (targetElement) {
-            if (targetElement === this.panel) {
-                return;
-            }
-            // Check if clicked element is any of the toggle buttons
-            for (let button of this.toggleButtons) {
-                if (targetElement === button) {
-                    return;
-                }
-            }
-            targetElement = targetElement.parentNode;
+        // Use closest() for efficient check
+        if (e.target.closest(this.panelSelector) || e.target.closest(this.toggleButtonSelector)) {
+            return;
         }
-
         this.close();
     }
-    
+
     handleKeyDown(e) {
-        if (!this.isOpen) return;
-        
         // Escape key
         if (e.key === 'Escape') {
             e.preventDefault();
             this.close();
             return;
         }
-        
+
         // Tab key - trap focus within panel
-        if (e.key === 'Tab') {
-            this.handleTabKey(e);
-        }
-    }
-    
-    handleTabKey(e) {
-        // If no focusable elements, prevent tabbing
-        if (this.focusableElements.length === 0) {
-            e.preventDefault();
-            return;
-        }
-        
-        // If only one focusable element, keep focus on it
-        if (this.focusableElements.length === 1) {
-            e.preventDefault();
-            this.firstFocusableElement.focus();
-            return;
-        }
-        
-        // Shift + Tab (backwards)
-        if (e.shiftKey) {
-            if (document.activeElement === this.firstFocusableElement) {
+        if (e.key === 'Tab' && this.focusableElements.length > 0) {
+            const first = this.focusableElements[0];
+            const last = this.focusableElements[this.focusableElements.length - 1];
+
+            if (this.focusableElements.length === 1) {
                 e.preventDefault();
-                this.lastFocusableElement.focus();
-            }
-        } 
-        // Tab (forwards)
-        else {
-            if (document.activeElement === this.lastFocusableElement) {
+                first.focus();
+            } else if (e.shiftKey && document.activeElement === first) {
                 e.preventDefault();
-                this.firstFocusableElement.focus();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
             }
         }
     }
@@ -213,178 +216,88 @@ class ThemeManager {
     constructor() {
         this.storageKey = 'accessibility-theme';
         this.buttons = document.querySelectorAll('.theme-button');
-        
+
+        if (this.buttons.length === 0) return;
+
         this.init();
     }
-    
+
     init() {
-        if (this.buttons.length === 0) return;
-        
         // Load saved theme or detect system preference
-        const savedTheme = this.loadTheme();
-        const themeToApply = savedTheme || this.detectSystemTheme();
-        this.applyTheme(themeToApply);
-        
-        // Listen for system theme changes
-        this.watchSystemTheme();
-        
+        const savedTheme = storage.get(this.storageKey);
+        this.applyTheme(savedTheme || this.detectSystemTheme());
+
+        // Watch for system theme changes only if no manual preference
+        if (!savedTheme) this.watchSystemTheme();
+
         // Bind events
         this.buttons.forEach(button => {
             button.addEventListener('click', (e) => this.handleThemeChange(e));
-            
-            // Keyboard navigation within radio group
-            button.addEventListener('keydown', (e) => this.handleKeyNav(e));
+            button.addEventListener('keydown', (e) => handleRadioKeyNav(e, this.buttons));
         });
     }
-    
+
     detectSystemTheme() {
-        // Check for dark mode preference
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
             return 'dark-theme';
         }
-        
-        // Check for high contrast preference
-        if (window.matchMedia && window.matchMedia('(prefers-contrast: high)').matches) {
+        if (window.matchMedia('(prefers-contrast: high)').matches) {
             return 'high-contrast';
         }
-        
-        // Default to light if no preference detected
         return 'light-theme';
     }
-    
+
     watchSystemTheme() {
-        // Only watch if user hasn't set a manual preference
-        if (this.loadTheme()) return;
-        
-        // Watch for dark mode changes
-        const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const contrastQuery = window.matchMedia('(prefers-contrast: high)');
-        
-        // Modern browsers
-        if (darkModeQuery.addEventListener) {
-            darkModeQuery.addEventListener('change', (e) => {
-                if (!this.loadTheme()) { // Only auto-switch if no manual preference
-                    this.applyTheme(e.matches ? 'dark-theme' : 'light-theme');
+        const handleChange = (query, darkTheme, lightTheme) => {
+            query.addEventListener('change', (e) => {
+                if (!storage.get(this.storageKey)) {
+                    this.applyTheme(e.matches ? darkTheme : lightTheme);
                 }
             });
-            
-            contrastQuery.addEventListener('change', (e) => {
-                if (!this.loadTheme() && e.matches) {
-                    this.applyTheme('high-contrast');
-                }
-            });
-        }
-        // Fallback for older browsers
-        else if (darkModeQuery.addListener) {
-            darkModeQuery.addListener((e) => {
-                if (!this.loadTheme()) {
-                    this.applyTheme(e.matches ? 'dark-theme' : 'light-theme');
-                }
-            });
-            
-            contrastQuery.addListener((e) => {
-                if (!this.loadTheme() && e.matches) {
-                    this.applyTheme('high-contrast');
-                }
-            });
-        }
+        };
+
+        handleChange(window.matchMedia('(prefers-color-scheme: dark)'), 'dark-theme', 'light-theme');
+        handleChange(window.matchMedia('(prefers-contrast: high)'), 'high-contrast', 'light-theme');
     }
-    
+
     handleThemeChange(e) {
-        const button = e.currentTarget;
-        const theme = button.dataset.theme;
-        
-        if (theme) {
-            const themeClass = theme === 'light' ? 'light-theme' :
-                             theme === 'dark' ? 'dark-theme' :
-                             theme === 'contrast' ? 'high-contrast' :
-                             theme === 'greyscale' ? 'greyscale' : 'light-theme';
-            
-            this.applyTheme(themeClass);
-            this.saveTheme(themeClass);
-        }
+        const theme = e.currentTarget.dataset.theme;
+        if (!theme) return;
+
+        const themeMap = {
+            'light': 'light-theme',
+            'dark': 'dark-theme',
+            'contrast': 'high-contrast',
+            'greyscale': 'greyscale'
+        };
+
+        const themeClass = themeMap[theme] || 'light-theme';
+        this.applyTheme(themeClass);
+        storage.set(this.storageKey, themeClass);
     }
-    
-    handleKeyNav(e) {
-        const currentButton = e.currentTarget;
-        const buttonsArray = Array.from(this.buttons);
-        const currentIndex = buttonsArray.indexOf(currentButton);
-        
-        let nextIndex = null;
-        
-        switch(e.key) {
-            case 'ArrowRight':
-            case 'ArrowDown':
-                e.preventDefault();
-                nextIndex = (currentIndex + 1) % buttonsArray.length;
-                break;
-            case 'ArrowLeft':
-            case 'ArrowUp':
-                e.preventDefault();
-                nextIndex = (currentIndex - 1 + buttonsArray.length) % buttonsArray.length;
-                break;
-            case 'Home':
-                e.preventDefault();
-                nextIndex = 0;
-                break;
-            case 'End':
-                e.preventDefault();
-                nextIndex = buttonsArray.length - 1;
-                break;
-        }
-        
-        if (nextIndex !== null) {
-            buttonsArray[nextIndex].focus();
-            buttonsArray[nextIndex].click();
-        }
-    }
-    
+
     applyTheme(theme) {
         const root = document.documentElement;
-        
-        // Remove all theme classes
-        root.classList.remove('light-theme', 'dark-theme', 'high-contrast', 'greyscale');
-        
-        // Add new theme class
+        root.className = root.className.replace(/\b(light-theme|dark-theme|high-contrast|greyscale)\b/g, '');
         root.classList.add(theme);
-        
+
         // Update system preference badge visibility
         const systemBadge = document.getElementById('theme-system-badge');
         if (systemBadge) {
-            const hasManualPreference = !!localStorage.getItem(this.storageKey);
-            systemBadge.style.display = hasManualPreference ? 'none' : 'inline-flex';
+            systemBadge.style.display = storage.get(this.storageKey) ? 'none' : 'inline-flex';
         }
-        
+
         // Update aria-checked states
+        const themeMap = {
+            'light-theme': 'light',
+            'dark-theme': 'dark',
+            'high-contrast': 'contrast',
+            'greyscale': 'greyscale'
+        };
+
         this.buttons.forEach(button => {
-            const buttonTheme = button.dataset.theme;
-            const isActive = 
-                (theme === 'light-theme' && buttonTheme === 'light') ||
-                (theme === 'dark-theme' && buttonTheme === 'dark') ||
-                (theme === 'high-contrast' && buttonTheme === 'contrast') ||
-                (theme === 'greyscale' && buttonTheme === 'greyscale');
-            
-            button.setAttribute('aria-checked', isActive ? 'true' : 'false');
+            button.setAttribute('aria-checked', button.dataset.theme === themeMap[theme] ? 'true' : 'false');
         });
-    }
-    
-    saveTheme(theme) {
-        try {
-            localStorage.setItem(this.storageKey, theme);
-        } catch (e) {
-            console.warn('Failed to save theme preference:', e);
-        }
-    }
-    
-    loadTheme() {
-        try {
-            // Return null if no saved preference (so system preference is used)
-            const saved = localStorage.getItem(this.storageKey);
-            return saved || null;
-        } catch (e) {
-            console.warn('Failed to load theme preference:', e);
-            return null;
-        }
     }
 }
 
@@ -395,97 +308,39 @@ class ThemeManager {
 class FontManager {
     constructor() {
         this.storageKey = 'accessibility-font';
-        this.defaultFont = 'normal';
         this.buttons = document.querySelectorAll('[data-font]');
-        
+
+        if (this.buttons.length === 0) return;
+
         this.init();
     }
-    
+
     init() {
-        if (this.buttons.length === 0) return;
-        
         // Load saved font
-        const savedFont = this.loadFont();
-        this.applyFont(savedFont);
-        
+        this.applyFont(storage.get(this.storageKey, 'normal'));
+
         // Bind events
         this.buttons.forEach(button => {
             button.addEventListener('click', (e) => this.handleFontChange(e));
-            
-            // Keyboard navigation within radio group
-            button.addEventListener('keydown', (e) => this.handleKeyNav(e));
+            button.addEventListener('keydown', (e) => handleRadioKeyNav(e, this.buttons));
         });
     }
-    
+
     handleFontChange(e) {
-        const button = e.currentTarget;
-        const font = button.dataset.font;
-        
+        const font = e.currentTarget.dataset.font;
         if (font) {
             this.applyFont(font);
-            this.saveFont(font);
+            storage.set(this.storageKey, font);
         }
     }
-    
-    handleKeyNav(e) {
-        const currentButton = e.currentTarget;
-        const buttonsArray = Array.from(this.buttons);
-        const currentIndex = buttonsArray.indexOf(currentButton);
-        
-        let nextIndex = null;
-        
-        switch(e.key) {
-            case 'ArrowRight':
-            case 'ArrowDown':
-                e.preventDefault();
-                nextIndex = (currentIndex + 1) % buttonsArray.length;
-                break;
-            case 'ArrowLeft':
-            case 'ArrowUp':
-                e.preventDefault();
-                nextIndex = (currentIndex - 1 + buttonsArray.length) % buttonsArray.length;
-                break;
-            case 'Home':
-                e.preventDefault();
-                nextIndex = 0;
-                break;
-            case 'End':
-                e.preventDefault();
-                nextIndex = buttonsArray.length - 1;
-                break;
-        }
-        
-        if (nextIndex !== null) {
-            buttonsArray[nextIndex].focus();
-            buttonsArray[nextIndex].click();
-        }
-    }
-    
+
     applyFont(font) {
         document.documentElement.setAttribute('data-selected-font', font);
-        
+
         // Update aria-checked states
         this.buttons.forEach(button => {
-            const isActive = button.dataset.font === font;
-            button.setAttribute('aria-checked', isActive ? 'true' : 'false');
+            button.setAttribute('aria-checked', button.dataset.font === font ? 'true' : 'false');
         });
-    }
-    
-    saveFont(font) {
-        try {
-            localStorage.setItem(this.storageKey, font);
-        } catch (e) {
-            console.warn('Failed to save font preference:', e);
-        }
-    }
-    
-    loadFont() {
-        try {
-            return localStorage.getItem(this.storageKey) || this.defaultFont;
-        } catch (e) {
-            console.warn('Failed to load font preference:', e);
-            return this.defaultFont;
-        }
     }
 }
 
@@ -495,57 +350,30 @@ class FontManager {
  */
 class VisualAidManager {
     constructor(options) {
-        this.type = options.type; // 'cursor', 'links', or 'images'
-        this.storageKey = `accessibility-${this.type}`;
+        this.storageKey = `accessibility-${options.type}`;
         this.button = document.querySelector(options.selector);
         this.attribute = options.attribute;
         this.activeValue = options.activeValue;
         this.inactiveValue = options.inactiveValue;
-        
+
         if (!this.button) return;
-        
-        this.init();
-    }
-    
-    init() {
-        // Load saved state
-        const savedState = this.loadState();
-        this.setState(savedState);
-        
+
+        // Load saved state and apply
+        this.setState(storage.get(this.storageKey) === 'active');
+
         // Bind events
         this.button.addEventListener('click', () => this.toggle());
     }
-    
+
     toggle() {
-        const currentState = document.documentElement.getAttribute(this.attribute);
-        const newState = currentState === this.inactiveValue;
-        
-        this.setState(newState);
-        this.saveState(newState);
+        const isActive = document.documentElement.getAttribute(this.attribute) === this.inactiveValue;
+        this.setState(isActive);
+        storage.set(this.storageKey, isActive ? 'active' : 'inactive');
     }
-    
+
     setState(isActive) {
-        const value = isActive ? this.activeValue : this.inactiveValue;
-        document.documentElement.setAttribute(this.attribute, value);
+        document.documentElement.setAttribute(this.attribute, isActive ? this.activeValue : this.inactiveValue);
         this.button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    }
-    
-    saveState(isActive) {
-        try {
-            localStorage.setItem(this.storageKey, isActive ? 'active' : 'inactive');
-        } catch (e) {
-            console.warn(`Failed to save ${this.type} preference:`, e);
-        }
-    }
-    
-    loadState() {
-        try {
-            const saved = localStorage.getItem(this.storageKey);
-            return saved === 'active';
-        } catch (e) {
-            console.warn(`Failed to load ${this.type} preference:`, e);
-            return false;
-        }
     }
 }
 
@@ -558,155 +386,94 @@ class ReadingMaskManager {
     constructor() {
         this.storageKey = 'accessibility-reading-mask';
         this.button = document.querySelector('.js__reading-mask-toggle');
-        this.maskElement = null;
         this.isActive = false;
-        this.maskHeight = 60; // Height of the transparent reading area in pixels
-        this.updateThrottle = null;
-        
+        this.maskHeight = 60;
+        this.rafId = null;
+        this.currentY = window.innerHeight / 2;
+
         if (!this.button) return;
-        
-        this.init();
-    }
-    
-    init() {
-        // Create mask element
+
         this.createMask();
-        
+
         // Load saved state
-        const savedState = this.loadState();
-        if (savedState) {
+        if (storage.get(this.storageKey) === 'active') {
             this.activate();
         }
-        
+
         // Bind events
         this.button.addEventListener('click', () => this.toggle());
     }
-    
+
     createMask() {
-        // Create mask container
         this.maskElement = document.createElement('div');
         this.maskElement.className = 'reading-mask';
         this.maskElement.setAttribute('aria-hidden', 'true');
         this.maskElement.style.display = 'none';
-        
-        // Top mask (above reading line)
-        const topMask = document.createElement('div');
-        topMask.className = 'reading-mask-top';
-        
-        // Bottom mask (below reading line)
-        const bottomMask = document.createElement('div');
-        bottomMask.className = 'reading-mask-bottom';
-        
-        // Reading line indicator (optional visual guide)
-        const readingLine = document.createElement('div');
-        readingLine.className = 'reading-mask-line';
-        
-        this.maskElement.appendChild(topMask);
-        this.maskElement.appendChild(readingLine);
-        this.maskElement.appendChild(bottomMask);
-        
+        this.maskElement.innerHTML = `
+            <div class="reading-mask-top"></div>
+            <div class="reading-mask-line"></div>
+            <div class="reading-mask-bottom"></div>
+        `;
         document.body.appendChild(this.maskElement);
-        
+
         // Store references
-        this.topMask = topMask;
-        this.bottomMask = bottomMask;
-        this.readingLine = readingLine;
+        [this.topMask, this.readingLine, this.bottomMask] = this.maskElement.children;
     }
-    
+
     toggle() {
         this.isActive ? this.deactivate() : this.activate();
     }
-    
+
     activate() {
         this.isActive = true;
         this.maskElement.style.display = 'block';
         this.button.setAttribute('aria-pressed', 'true');
-        
-        // Bind mouse/touch events
-        document.addEventListener('mousemove', this.handleMouseMove);
-        document.addEventListener('touchmove', this.handleTouchMove);
-        document.addEventListener('scroll', this.handleScroll);
-        
+
+        // Bind events with arrow functions to preserve context
+        this.handleMove = (e) => {
+            this.currentY = e.touches ? e.touches[0].clientY : e.clientY;
+            if (!this.rafId) {
+                this.rafId = requestAnimationFrame(() => {
+                    this.updateMaskPosition(this.currentY);
+                    this.rafId = null;
+                });
+            }
+        };
+
+        document.addEventListener('mousemove', this.handleMove);
+        document.addEventListener('touchmove', this.handleMove);
+
         // Initial position
-        this.updateMaskPosition(window.innerHeight / 2);
-        
-        // Save state
-        this.saveState(true);
+        this.updateMaskPosition(this.currentY);
+        storage.set(this.storageKey, 'active');
     }
-    
+
     deactivate() {
         this.isActive = false;
         this.maskElement.style.display = 'none';
         this.button.setAttribute('aria-pressed', 'false');
-        
-        // Unbind events
-        document.removeEventListener('mousemove', this.handleMouseMove);
-        document.removeEventListener('touchmove', this.handleTouchMove);
-        document.removeEventListener('scroll', this.handleScroll);
-        
-        // Save state
-        this.saveState(false);
+
+        document.removeEventListener('mousemove', this.handleMove);
+        document.removeEventListener('touchmove', this.handleMove);
+
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
+        }
+
+        storage.set(this.storageKey, 'inactive');
     }
-    
-    handleMouseMove = (e) => {
-        // Throttle updates for performance
-        if (this.updateThrottle) return;
-        
-        this.updateThrottle = setTimeout(() => {
-            this.updateMaskPosition(e.clientY);
-            this.updateThrottle = null;
-        }, 16); // ~60fps
-    }
-    
-    handleTouchMove = (e) => {
-        if (e.touches.length === 0) return;
-        
-        if (this.updateThrottle) return;
-        
-        this.updateThrottle = setTimeout(() => {
-            this.updateMaskPosition(e.touches[0].clientY);
-            this.updateThrottle = null;
-        }, 16);
-    }
-    
-    handleScroll = () => {
-        // Keep mask at same position during scroll
-        // The mask is fixed, so it naturally stays in place
-    }
-    
+
     updateMaskPosition(mouseY) {
         const halfHeight = this.maskHeight / 2;
         const topHeight = Math.max(0, mouseY - halfHeight);
         const bottomTop = mouseY + halfHeight;
-        
-        // Update top mask
+
         this.topMask.style.height = `${topHeight}px`;
-        
-        // Update reading line position
         this.readingLine.style.top = `${topHeight}px`;
         this.readingLine.style.height = `${this.maskHeight}px`;
-        
-        // Update bottom mask
         this.bottomMask.style.top = `${bottomTop}px`;
         this.bottomMask.style.height = `calc(100vh - ${bottomTop}px)`;
-    }
-    
-    saveState(isActive) {
-        try {
-            localStorage.setItem(this.storageKey, isActive ? 'active' : 'inactive');
-        } catch (e) {
-            console.warn('Failed to save reading mask preference:', e);
-        }
-    }
-    
-    loadState() {
-        try {
-            const saved = localStorage.getItem(this.storageKey);
-            return saved === 'active';
-        } catch (e) {
-            console.warn('Failed to load reading mask preference:', e);
-            return false;
-        }
     }
 }
 
@@ -718,91 +485,45 @@ class ResetManager {
     constructor(managers) {
         this.managers = managers;
         this.button = document.getElementById('resetButton');
-        
+
         if (!this.button) return;
-        
-        this.init();
-    }
-    
-    init() {
+
         this.button.addEventListener('click', () => this.resetAll());
     }
-    
+
     resetAll() {
-        // Clear all localStorage
-        try {
-            const keysToRemove = [
-                'accessibility-theme',
-                'accessibility-font',
-                'accessibility-cursor',
-                'accessibility-links',
-                'accessibility-images',
-                'accessibility-reading-mask'
-            ];
-            
-            keysToRemove.forEach(key => localStorage.removeItem(key));
-        } catch (e) {
-            console.warn('Failed to clear localStorage:', e);
-        }
-        
+        // Clear all localStorage keys
+        ['theme', 'font', 'cursor', 'links', 'images', 'reading-mask'].forEach(key =>
+            storage.remove(`accessibility-${key}`)
+        );
+
         // Reset to defaults
         const root = document.documentElement;
-        
-        // Theme
-        root.classList.remove('dark-theme', 'high-contrast', 'greyscale');
+        root.className = root.className.replace(/\b(dark-theme|high-contrast|greyscale)\b/g, '');
         root.classList.add('light-theme');
-        
-        // Font
         root.setAttribute('data-selected-font', 'normal');
-        
-        // Visual aids
         root.setAttribute('data-cursor', 'normal-cursor');
         root.setAttribute('data-links', 'no-highlight');
         root.setAttribute('data-images', 'images-mode');
-        
+
         // Update UI states
-        if (this.managers.theme) {
-            this.managers.theme.applyTheme('light-theme');
-        }
-        
-        if (this.managers.font) {
-            this.managers.font.applyFont('normal');
-        }
-        
-        if (this.managers.cursor) {
-            this.managers.cursor.setState(false);
-        }
-        
-        if (this.managers.links) {
-            this.managers.links.setState(false);
-        }
-        
-        if (this.managers.images) {
-            this.managers.images.setState(false);
-        }
-        
-        if (this.managers.readingMask && this.managers.readingMask.isActive) {
+        this.managers.theme?.applyTheme('light-theme');
+        this.managers.font?.applyFont('normal');
+        this.managers.cursor?.setState(false);
+        this.managers.links?.setState(false);
+        this.managers.images?.setState(false);
+        if (this.managers.readingMask?.isActive) {
             this.managers.readingMask.deactivate();
         }
-        
+
         // Announce to screen readers
-        this.announceReset();
-    }
-    
-    announceReset() {
-        // Create a live region announcement
         const announcement = document.createElement('div');
         announcement.setAttribute('role', 'status');
         announcement.setAttribute('aria-live', 'polite');
         announcement.className = 'sr-only';
         announcement.textContent = 'All accessibility settings have been reset to defaults';
-        
         document.body.appendChild(announcement);
-        
-        // Remove after announcement
-        setTimeout(() => {
-            document.body.removeChild(announcement);
-        }, 1000);
+        setTimeout(() => announcement.remove(), 1000);
     }
 }
 
