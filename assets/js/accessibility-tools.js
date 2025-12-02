@@ -9,53 +9,55 @@ class AccessibilityWidgetController {
         this.toggleButtonSelector = options.toggleButton || '.accessibility-toggle-btn';
         this.panelSelector = options.panel || '.accessibility-widget-panel';
         this.backdropSelector = options.backdrop || '.accessibility-widget-backdrop';
-        
-        // Elements
-        this.toggleButton = document.querySelector(this.toggleButtonSelector);
+
+        // Elements - Support multiple toggle buttons
+        this.toggleButtons = document.querySelectorAll(this.toggleButtonSelector);
         this.panel = document.querySelector(this.panelSelector);
         this.backdrop = document.querySelector(this.backdropSelector);
-        
+
         // State
         this.isOpen = false;
         this.focusedElementBeforeOpen = null;
         this.focusableElements = [];
         this.firstFocusableElement = null;
         this.lastFocusableElement = null;
-        
+
         // Validate required elements
-        if (!this.toggleButton || !this.panel) {
+        if (this.toggleButtons.length === 0 || !this.panel) {
             console.error('AccessibilityWidget: Required elements not found');
             return;
         }
-        
+
         this.init();
     }
-    
+
     init() {
         this.bindEvents();
         this.updateFocusableElements();
         this.bindCloseButton();
     }
-    
+
     bindCloseButton() {
         const closeButton = this.panel.querySelector('.widget-close-btn');
         if (closeButton) {
             closeButton.addEventListener('click', () => this.close());
         }
     }
-    
+
     bindEvents() {
-        // Toggle button
-        this.toggleButton.addEventListener('click', () => this.toggle());
-        
+        // Toggle buttons - bind all of them
+        this.toggleButtons.forEach(button => {
+            button.addEventListener('click', () => this.toggle());
+        });
+
         // Backdrop click
         if (this.backdrop) {
             this.backdrop.addEventListener('click', () => this.close());
         }
-        
+
         // Click outside
         document.addEventListener('click', (e) => this.handleClickOutside(e));
-        
+
         // Keyboard events
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
     }
@@ -76,17 +78,19 @@ class AccessibilityWidgetController {
     open() {
         this.isOpen = true;
         this.focusedElementBeforeOpen = document.activeElement;
-        
-        // Update ARIA and visibility
-        this.toggleButton.setAttribute('aria-expanded', 'true');
+
+        // Update ARIA and visibility for all toggle buttons
+        this.toggleButtons.forEach(button => {
+            button.setAttribute('aria-expanded', 'true');
+        });
         this.panel.setAttribute('aria-hidden', 'false');
         this.panel.setAttribute('data-open', 'true');
-        
+
         if (this.backdrop) {
             this.backdrop.setAttribute('aria-hidden', 'false');
             this.backdrop.style.display = 'block';
         }
-        
+
         // Focus management
         this.updateFocusableElements();
         if (this.firstFocusableElement) {
@@ -95,48 +99,62 @@ class AccessibilityWidgetController {
                 this.firstFocusableElement.focus();
             }, 100);
         }
-        
+
         // Prevent body scroll
         //document.body.style.overflow = 'hidden';
     }
     
     close() {
         this.isOpen = false;
-        
-        // Update ARIA and visibility
-        this.toggleButton.setAttribute('aria-expanded', 'false');
+
+        // Update ARIA and visibility for all toggle buttons
+        this.toggleButtons.forEach(button => {
+            button.setAttribute('aria-expanded', 'false');
+        });
         this.panel.setAttribute('aria-hidden', 'true');
         this.panel.setAttribute('data-open', 'false');
-        
+
         if (this.backdrop) {
             this.backdrop.setAttribute('aria-hidden', 'true');
             this.backdrop.style.display = 'none';
         }
-        
+
         // Restore body scroll
         //document.body.style.overflow = '';
-        
-        // Return focus to toggle button
+
+        // Return focus to the button that was focused before opening
         if (this.focusedElementBeforeOpen) {
             this.focusedElementBeforeOpen.focus();
         } else {
-            this.toggleButton.focus();
+            // Focus the first visible toggle button
+            const visibleButton = Array.from(this.toggleButtons).find(btn =>
+                btn.offsetParent !== null
+            );
+            if (visibleButton) {
+                visibleButton.focus();
+            }
         }
     }
     
     handleClickOutside(e) {
         if (!this.isOpen) return;
-        
+
         let targetElement = e.target;
-        
-        // Check if click is outside both panel and toggle button
+
+        // Check if click is outside both panel and all toggle buttons
         while (targetElement) {
-            if (targetElement === this.panel || targetElement === this.toggleButton) {
+            if (targetElement === this.panel) {
                 return;
+            }
+            // Check if clicked element is any of the toggle buttons
+            for (let button of this.toggleButtons) {
+                if (targetElement === button) {
+                    return;
+                }
             }
             targetElement = targetElement.parentNode;
         }
-        
+
         this.close();
     }
     
