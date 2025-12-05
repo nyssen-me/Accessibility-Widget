@@ -2,7 +2,7 @@
 
 A lightweight, customizable accessibility toolkit that provides users with visual and reading assistance tools to improve their browsing experience.
 
-**Live Demo:** Try all features and see how the accessibility tools work in a real-world environment at https://nyssen.me/widgets/accessibility-tools/
+**Live Demo:** Try all features and see how the accessibility tools work in a real-world environment at <a href="https://nyssen.me/widgets/accessibility-tools/" target="_blank">https://nyssen.me/widgets/accessibility-tools/</a>
 
 ## Overview
 
