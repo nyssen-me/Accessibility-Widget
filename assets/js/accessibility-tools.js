@@ -387,7 +387,7 @@ class ReadingMaskManager {
         this.storageKey = 'accessibility-reading-mask';
         this.button = document.querySelector('.js__reading-mask-toggle');
         this.isActive = false;
-        this.maskHeight = 60;
+        this.maskHeight = 100;
         this.rafId = null;
         this.currentY = window.innerHeight / 2;
 
@@ -428,6 +428,7 @@ class ReadingMaskManager {
         this.isActive = true;
         this.maskElement.style.display = 'block';
         this.button.setAttribute('aria-pressed', 'true');
+        document.documentElement.setAttribute('data-reading-mask', 'active');
 
         // Bind events with arrow functions to preserve context
         this.handleMove = (e) => {
@@ -452,6 +453,7 @@ class ReadingMaskManager {
         this.isActive = false;
         this.maskElement.style.display = 'none';
         this.button.setAttribute('aria-pressed', 'false');
+        document.documentElement.setAttribute('data-reading-mask', 'inactive');
 
         document.removeEventListener('mousemove', this.handleMove);
         document.removeEventListener('touchmove', this.handleMove);
@@ -505,6 +507,7 @@ class ResetManager {
         root.setAttribute('data-cursor', 'normal-cursor');
         root.setAttribute('data-links', 'no-highlight');
         root.setAttribute('data-images', 'images-mode');
+        root.setAttribute('data-reading-mask', 'inactive');
 
         // Update UI states
         this.managers.theme?.applyTheme('light-theme');

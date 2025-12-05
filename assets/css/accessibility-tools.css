@@ -851,6 +851,7 @@ button:focus-visible,
 [data-selected-font="large"] .accessibility-toggle-btn::after,
 [data-selected-font="bold"] .accessibility-toggle-btn::after,
 [data-images="images-hidden"] .accessibility-toggle-btn::after,
+[data-reading-mask="active"] .accessibility-toggle-btn::after,
 .dark-theme .accessibility-toggle-btn::after,
 .greyscale .accessibility-toggle-btn::after,
 .high-contrast .accessibility-toggle-btn::after {
@@ -869,4 +870,3 @@ button:focus-visible,
     height: 1.4rem;
     border-radius: 0;
 }
-
